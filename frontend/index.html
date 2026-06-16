@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wren</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ── Topbar ─────────────────────────────────────────────────────────────── -->
+<header class="topbar">
+  <span class="logo">wren</span>
+  <div class="topbar-spacer"></div>
+  <select id="env-select"><option value="">No environment</option></select>
+  <button class="btn btn-ghost" id="btn-manage-env">Environments</button>
+</header>
+
+<!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-actions">
+    <button class="btn btn-ghost" id="btn-new-ws" style="flex:1">+ Workspace</button>
+    <button class="btn btn-ghost" id="btn-import-postman" title="Import Postman collection">Import</button>
+  </div>
+
+  <div class="workspace-list" id="workspace-list">
+    <div class="empty-ws">Loading…</div>
+  </div>
+
+  <div class="sidebar-bottom">
+    <button class="history-toggle" id="btn-history">History ▶</button>
+    <div id="history-section">
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Tab strip -->
+  <div id="tab-strip" class="tab-strip"></div>
+
+  <!-- Request panel -->
+  <div class="request-panel">
+
+    <!-- Name bar -->
+    <div class="req-name-bar">
+      <button class="btn btn-ghost" id="btn-new-req">+ New</button>
+      <input type="text" id="req-name" class="name-input" placeholder="Request name">
+      <button class="btn btn-ghost" id="btn-import-curl">Import cURL</button>
+      <button class="btn btn-ghost" id="btn-copy-curl">Copy cURL</button>
+      <button class="btn btn-primary" id="btn-save">Save</button>
+    </div>
+
+    <!-- URL bar -->
+    <div class="req-url-bar">
+      <select id="req-method" class="method-select method-GET">
+        <option>GET</option>
+        <option>POST</option>
+        <option>PUT</option>
+        <option>DELETE</option>
+        <option>PATCH</option>
+        <option>HEAD</option>
+        <option>OPTIONS</option>
+      </select>
+      <input type="text" id="req-url" class="url-input" placeholder="https://{{baseUrl}}/path">
+      <button class="btn btn-send" id="btn-send">Send</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="req-tabs">
+      <button class="tab-btn active" data-tab="params">Params</button>
+      <button class="tab-btn" data-tab="headers">Headers</button>
+      <button class="tab-btn" data-tab="body">Body</button>
+      <button class="tab-btn" data-tab="auth">Auth</button>
+    </div>
+
+    <div id="tab-params" class="tab-panel active"></div>
+    <div id="tab-headers" class="tab-panel"></div>
+    <div id="tab-body" class="tab-panel"></div>
+    <div id="tab-auth" class="tab-panel"></div>
+  </div>
+
+  <!-- Resize handle -->
+  <div class="resize-handle"></div>
+
+  <!-- Response panel -->
+  <div class="response-panel">
+    <div class="res-meta" id="res-meta"></div>
+    <div class="res-tabs">
+      <button class="tab-btn active" data-tab="pretty">Pretty</button>
+      <button class="tab-btn" data-tab="raw">Raw</button>
+      <button class="tab-btn" data-tab="res-headers">Headers</button>
+    </div>
+    <div class="res-body" id="res-body">
+      <div style="color:var(--text3);padding:20px;font-size:12px">Send a request to see the response.</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Modal overlay ─────────────────────────────────────────────────────── -->
+<div id="modal-overlay" class="modal-overlay hidden">
+
+  <!-- Import cURL -->
+  <div id="modal-curl" class="modal">
+    <h3>Import cURL</h3>
+    <div>
+      <label>Paste a curl command:</label>
+      <textarea id="curl-input" placeholder="curl -X POST https://api.example.com/users \&#10;  -H 'Content-Type: application/json' \&#10;  -d '{&quot;name&quot;: &quot;Alice&quot;}'"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-curl-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-curl-import">Import</button>
+    </div>
+  </div>
+
+  <!-- New workspace -->
+  <div id="modal-new-ws" class="modal">
+    <h3>New Workspace</h3>
+    <div>
+      <label>Name</label>
+      <input type="text" id="new-ws-name" placeholder="My API">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-new-ws-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-new-ws-create">Create</button>
+    </div>
+  </div>
+
+  <!-- Save request -->
+  <div id="modal-save" class="modal">
+    <h3>Save Request</h3>
+    <div>
+      <label>Request name</label>
+      <input type="text" id="save-req-name" placeholder="Get Users">
+    </div>
+    <div>
+      <label>Workspace</label>
+      <select id="save-ws-select"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-save-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-confirm">Save</button>
+    </div>
+  </div>
+
+  <!-- Environments -->
+  <div id="modal-env" class="modal" style="max-width:640px">
+    <h3>Environments</h3>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="new-env-name" placeholder="New environment name" style="flex:1">
+      <button class="btn btn-primary" id="btn-env-add">Add</button>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border)">
+    <div id="env-modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-env-save">Save &amp; Close</button>
+    </div>
+  </div>
+
+  <!-- Import Postman -->
+  <div id="modal-postman" class="modal">
+    <h3>Import Postman Collection</h3>
+    <div>
+      <label>Select a Postman Collection JSON file (v2 / v2.1):</label>
+      <input type="file" id="postman-file" accept=".json" style="margin-top:6px;color:var(--text2)">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-postman-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-postman-import">Import</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
