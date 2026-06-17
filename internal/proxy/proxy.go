@@ -38,7 +38,7 @@ func Execute(req models.Request, env models.Environment) models.SendResponse {
 
 	switch req.Body.Type {
 	case "json":
-		bodyReader = strings.NewReader(sub(req.Body.Content, vars))
+		bodyReader = strings.NewReader(strings.TrimSpace(sub(req.Body.Content, vars)))
 		contentType = "application/json"
 	case "form":
 		form := url.Values{}

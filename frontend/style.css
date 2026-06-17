@@ -163,6 +163,27 @@ body {
   color: var(--text2);
 }
 .history-item:hover { background: var(--bg3); color: var(--text); }
+.history-date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+  font-size: 10px;
+  color: var(--text2);
+  margin-bottom: 2px;
+}
+.history-date-nav button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent);
+  padding: 1px 5px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 3px;
+}
+.history-date-nav button:hover { background: var(--bg3); }
+.history-date-nav button:disabled { color: var(--text3); cursor: default; background: none; }
 
 /* ── Method badges ──────────────────────────────────────────────────────── */
 .mb {
@@ -434,6 +455,15 @@ select option { background: var(--bg3); }
   flex: 1;
   min-height: 80px;
   width: 100%;
+}
+.body-preview {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--bg3);
+  margin-top: 4px;
 }
 
 .form-group { display: flex; flex-direction: column; gap: 4px; }

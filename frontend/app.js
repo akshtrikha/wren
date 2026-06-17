@@ -28,7 +28,7 @@ const S = {
   workspaces: [], environments: [],
   envId: '', wsId: '', folderId: '', reqId: '',
   expandedWs: new Set(),
-  showHistory: false, history: [],
+  showHistory: false, history: [], historyDate: '',
   req: blankReq(),
   response: null, loading: false,
   reqTab: 'params', resTab: 'pretty',
@@ -115,6 +115,7 @@ function switchTab(tabId) {
   if (!t) return
   loadTab(t)
   renderTabs(); renderRequestPanel(); renderResponse(); renderSidebar()
+  saveTabSession()
 }
 
 function addTab() {
@@ -122,6 +123,7 @@ function addTab() {
   const t = newTabObj()
   S.tabs.push(t); loadTab(t)
   renderTabs(); renderRequestPanel(); renderResponse(); renderSidebar()
+  saveTabSession()
 }
 
 function closeTab(tabId) {
@@ -135,6 +137,26 @@ function closeTab(tabId) {
     renderRequestPanel(); renderResponse(); renderSidebar()
   }
   renderTabs()
+  saveTabSession()
+}
+
+// ─── tab session persistence ──────────────────────────────────────────────
+function saveTabSession() {
+  try { localStorage.setItem('wren_tabs', JSON.stringify({ tabs: S.tabs, activeTabId: S.activeTabId })) } catch (_) {}
+}
+
+function restoreTabSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('wren_tabs') || 'null')
+    if (saved && saved.tabs && saved.tabs.length) {
+      S.tabs = saved.tabs
+      S.activeTabId = saved.activeTabId
+      const t = S.tabs.find(t => t.id === S.activeTabId) || S.tabs[0]
+      if (t) loadTab(t)
+      return true
+    }
+  } catch (_) {}
+  return false
 }
 
 // ─── sidebar ──────────────────────────────────────────────────────────────
@@ -277,8 +299,8 @@ function renderBodyTab() {
   if (b.type === 'none') {
     inner = `<span style="color:var(--text3);font-size:12px;margin-top:4px">No request body.</span>`
   } else if (b.type === 'json' || b.type === 'raw') {
-    inner = `<textarea id="body-ta" class="body-textarea" placeholder="${b.type === 'json' ? '{ "key": "value" }' : 'Raw body…'}">${esc(b.content)}</textarea>`
-    if (b.type === 'json') inner += `<button class="add-row-btn" onclick="formatJSON()" style="margin-top:2px">Format JSON</button>`
+    inner = `<textarea id="body-ta" class="body-textarea" placeholder="${b.type === 'json' ? '{ "key": "value" }' : 'Raw body…'}"${b.type === 'json' ? ' oninput="updateBodyPreview()"' : ''}>${esc(b.content)}</textarea>`
+    if (b.type === 'json') inner += `<button class="add-row-btn" onclick="beautifyJSON()" style="margin-top:2px">Beautify</button><pre id="body-preview" class="json-viewer body-preview"></pre>`
   } else {
     const fields = b.fields || []
     inner = fields.map((f, i) => `<div class="kv-row" data-field="bodyfields" data-idx="${i}">
@@ -290,6 +312,7 @@ function renderBodyTab() {
   }
 
   $('tab-body').innerHTML = `<div class="body-type-bar">${typeBtns}</div>${inner}`
+  if (b.type === 'json') updateBodyPreview()
 }
 
 function setBodyType(type) {
@@ -298,11 +321,21 @@ function setBodyType(type) {
   renderBodyTab()
 }
 
-function formatJSON() {
+function updateBodyPreview() {
+  const ta = $('body-ta')
+  const preview = $('body-preview')
+  if (!ta || !preview) return
+  const val = ta.value.trim()
+  preview.innerHTML = val ? highlightJSON(val) : ''
+}
+
+function beautifyJSON() {
   const ta = $('body-ta')
   if (!ta) return
-  try { ta.value = JSON.stringify(JSON.parse(ta.value), null, 2) }
-  catch (_) { alert('Invalid JSON') }
+  try {
+    ta.value = JSON.stringify(JSON.parse(ta.value.trim()), null, 2)
+    updateBodyPreview()
+  } catch (_) { alert('Invalid JSON') }
 }
 
 function addBodyField() {
@@ -318,7 +351,7 @@ function removeBodyField(idx) {
 
 function syncBody() {
   const ta = $('body-ta')
-  if (ta) S.req.body.content = ta.value
+  if (ta) S.req.body.content = S.req.body.type === 'json' ? ta.value.trim() : ta.value
   const rows = [...document.querySelectorAll('.kv-row[data-field="bodyfields"]')]
   if (rows.length) {
     S.req.body.fields = rows.map(row => ({
@@ -439,6 +472,7 @@ function loadReq(wsId, folderId, reqId) {
   S.response = null; S.reqTab = 'params'; S.resTab = 'pretty'
   syncActiveTab(); renderTabs()
   renderRequestPanel(); renderResponse(); renderSidebar()
+  saveTabSession()
 }
 
 function newRequest() {
@@ -446,6 +480,7 @@ function newRequest() {
   S.req = blankReq(); S.response = null; S.reqTab = 'params'; S.resTab = 'pretty'
   syncActiveTab(); renderTabs()
   renderRequestPanel(); renderResponse(); renderSidebar()
+  saveTabSession()
 }
 
 function syncFromDOM() {
@@ -505,6 +540,7 @@ async function sendRequest() {
   btn.classList.remove('loading'); btn.textContent = 'Send'
   S.resTab = 'pretty'
   syncActiveTab()
+  saveTabSession()
   renderResponse()
 }
 
@@ -672,8 +708,9 @@ async function toggleHistory() {
   if (S.showHistory) {
     sec.style.display = ''
     btn.textContent = 'History ▼'
+    if (!S.historyDate) S.historyDate = new Date().toISOString().slice(0, 10)
     try {
-      S.history = (await api.get('/api/history')).reverse()
+      S.history = (await api.get(`/api/history?date=${S.historyDate}`)).reverse()
       renderHistory()
     } catch (_) {}
   } else {
@@ -682,13 +719,33 @@ async function toggleHistory() {
   }
 }
 
+async function goHistoryDay(date) {
+  S.historyDate = date
+  try {
+    S.history = (await api.get(`/api/history?date=${date}`)).reverse()
+    renderHistory()
+  } catch (_) {}
+}
+
 function renderHistory() {
   const list = $('history-list')
+  const today = new Date().toISOString().slice(0, 10)
+  const date = S.historyDate || today
+  const prev = new Date(date + 'T12:00:00Z'); prev.setUTCDate(prev.getUTCDate() - 1)
+  const next = new Date(date + 'T12:00:00Z'); next.setUTCDate(next.getUTCDate() + 1)
+  const prevStr = prev.toISOString().slice(0, 10)
+  const nextStr = next.toISOString().slice(0, 10)
+  const isToday = date === today
+  const nav = `<div class="history-date-nav">
+    <button onclick="goHistoryDay('${prevStr}')">‹</button>
+    <span>${date}</span>
+    <button onclick="goHistoryDay('${nextStr}')"${isToday ? ' disabled' : ''}>›</button>
+  </div>`
   if (!S.history.length) {
-    list.innerHTML = `<div style="padding:6px 4px;color:var(--text3);font-size:11px">No history today.</div>`
+    list.innerHTML = nav + `<div style="padding:6px 4px;color:var(--text3);font-size:11px">No history for this date.</div>`
     return
   }
-  list.innerHTML = S.history.slice(0, 40).map((h, i) => {
+  list.innerHTML = nav + S.history.slice(0, 40).map((h, i) => {
     const t = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     return `<div class="history-item" onclick="loadFromHistory(${i})">
       ${mbHtml(h.request?.method || 'GET')}
@@ -701,9 +758,14 @@ function renderHistory() {
 function loadFromHistory(idx) {
   const h = S.history[idx]
   if (!h) return
-  S.req = clone(h.request); S.response = clone(h.response)
-  S.reqId = ''; S.wsId = ''; S.reqTab = 'params'; S.resTab = 'pretty'
-  renderRequestPanel(); renderResponse(); renderSidebar()
+  syncFromDOM(); syncActiveTab()
+  const t = newTabObj()
+  t.req = clone(h.request)
+  t.response = h.response ? clone(h.response) : null
+  t.resTab = 'pretty'
+  S.tabs.push(t); loadTab(t)
+  renderTabs(); renderRequestPanel(); renderResponse(); renderSidebar()
+  saveTabSession()
 }
 
 // ─── modals ───────────────────────────────────────────────────────────────
@@ -796,6 +858,10 @@ function wireEvents() {
     handle.classList.remove('dragging')
     document.body.style.userSelect = ''
   }
+
+  window.addEventListener('beforeunload', () => {
+    syncFromDOM(); syncActiveTab(); saveTabSession()
+  })
 }
 
 // ─── init ─────────────────────────────────────────────────────────────────
@@ -807,8 +873,10 @@ async function init() {
     ])
   } catch (e) { console.error('Init failed', e) }
 
-  const first = newTabObj()
-  S.tabs = [first]; S.activeTabId = first.id
+  if (!restoreTabSession()) {
+    const first = newTabObj()
+    S.tabs = [first]; S.activeTabId = first.id
+  }
 
   wireEvents()
   renderTabs()
