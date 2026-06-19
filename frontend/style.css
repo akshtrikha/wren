@@ -456,14 +456,26 @@ select option { background: var(--bg3); }
   min-height: 80px;
   width: 100%;
 }
-.body-preview {
-  max-height: 180px;
-  overflow-y: auto;
+.body-ce {
+  min-height: 120px;
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
+  cursor: text;
+  caret-color: var(--text);
+  padding: 6px 8px;
+  background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 8px;
-  background: var(--bg3);
-  margin-top: 4px;
+  line-height: 1.5;
+  overflow-y: auto;
+}
+.body-ce:focus { border-color: var(--accent); }
+.body-ce:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text3);
+  pointer-events: none;
 }
 
 .form-group { display: flex; flex-direction: column; gap: 4px; }

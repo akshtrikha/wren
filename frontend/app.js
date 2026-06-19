@@ -49,8 +49,7 @@ function mbHtml(method) {
   return `<span class="mb mb-${esc(method)}">${esc(method)}</span>`
 }
 
-function highlightJSON(str) {
-  try { str = JSON.stringify(JSON.parse(str), null, 2) } catch (_) {}
+function colorizeJSON(str) {
   return str
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(
@@ -63,6 +62,11 @@ function highlightJSON(str) {
         return `<span class="${c}">${m}</span>`
       }
     )
+}
+
+function highlightJSON(str) {
+  try { str = JSON.stringify(JSON.parse(str), null, 2) } catch (_) {}
+  return colorizeJSON(str)
 }
 
 function fmtSize(b) {
@@ -298,9 +302,11 @@ function renderBodyTab() {
   let inner = ''
   if (b.type === 'none') {
     inner = `<span style="color:var(--text3);font-size:12px;margin-top:4px">No request body.</span>`
-  } else if (b.type === 'json' || b.type === 'raw') {
-    inner = `<textarea id="body-ta" class="body-textarea" placeholder="${b.type === 'json' ? '{ "key": "value" }' : 'Raw body…'}"${b.type === 'json' ? ' oninput="updateBodyPreview()"' : ''}>${esc(b.content)}</textarea>`
-    if (b.type === 'json') inner += `<button class="add-row-btn" onclick="beautifyJSON()" style="margin-top:2px">Beautify</button><pre id="body-preview" class="json-viewer body-preview"></pre>`
+  } else if (b.type === 'json') {
+    inner = `<div id="body-ta" class="body-ce json-viewer" contenteditable="true" spellcheck="false" data-placeholder='{ "key": "value" }' oninput="updateBodyCE()" onkeydown="handleBodyKeydown(event)" onpaste="handleBodyPaste(event)"></div>`
+    inner += `<button class="add-row-btn" onclick="beautifyJSON()" style="margin-top:2px">Beautify</button>`
+  } else if (b.type === 'raw') {
+    inner = `<textarea id="body-ta" class="body-textarea" placeholder="Raw body…">${esc(b.content)}</textarea>`
   } else {
     const fields = b.fields || []
     inner = fields.map((f, i) => `<div class="kv-row" data-field="bodyfields" data-idx="${i}">
@@ -312,7 +318,7 @@ function renderBodyTab() {
   }
 
   $('tab-body').innerHTML = `<div class="body-type-bar">${typeBtns}</div>${inner}`
-  if (b.type === 'json') updateBodyPreview()
+  if (b.type === 'json') $('body-ta').innerHTML = colorizeJSON(b.content)
 }
 
 function setBodyType(type) {
@@ -321,20 +327,66 @@ function setBodyType(type) {
   renderBodyTab()
 }
 
-function updateBodyPreview() {
-  const ta = $('body-ta')
-  const preview = $('body-preview')
-  if (!ta || !preview) return
-  const val = ta.value.trim()
-  preview.innerHTML = val ? highlightJSON(val) : ''
+function getCaretOffset(el) {
+  const sel = window.getSelection()
+  if (!sel || !sel.rangeCount) return 0
+  const r = sel.getRangeAt(0).cloneRange()
+  r.selectNodeContents(el)
+  r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset)
+  return r.toString().length
+}
+
+function restoreCaretOffset(el, offset) {
+  const sel = window.getSelection()
+  if (!sel) return
+  const range = document.createRange()
+  let charCount = 0, found = false
+  const walk = node => {
+    if (found) return
+    if (node.nodeType === Node.TEXT_NODE) {
+      const end = charCount + node.length
+      if (offset <= end) {
+        range.setStart(node, offset - charCount)
+        range.collapse(true)
+        found = true
+        return
+      }
+      charCount = end
+    } else { for (const c of node.childNodes) walk(c) }
+  }
+  walk(el)
+  if (!found) { range.selectNodeContents(el); range.collapse(false) }
+  sel.removeAllRanges(); sel.addRange(range)
+}
+
+function updateBodyCE() {
+  const el = $('body-ta')
+  if (!el || el.tagName === 'TEXTAREA') return
+  const offset = getCaretOffset(el)
+  el.innerHTML = colorizeJSON(el.innerText || '')
+  restoreCaretOffset(el, offset)
+}
+
+function handleBodyPaste(e) {
+  e.preventDefault()
+  document.execCommand('insertText', false, e.clipboardData.getData('text/plain'))
+}
+
+function handleBodyKeydown(e) {
+  if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '  ') }
+  else if (e.key === 'Enter') { e.preventDefault(); document.execCommand('insertText', false, '\n') }
 }
 
 function beautifyJSON() {
-  const ta = $('body-ta')
-  if (!ta) return
+  const el = $('body-ta')
+  if (!el) return
+  const text = el.tagName === 'TEXTAREA' ? el.value : (el.innerText || '')
   try {
-    ta.value = JSON.stringify(JSON.parse(ta.value.trim()), null, 2)
-    updateBodyPreview()
+    const formatted = JSON.stringify(JSON.parse(text.trim()), null, 2)
+    el.innerHTML = colorizeJSON(formatted)
+    S.req.body.content = formatted
+    const r = document.createRange(), s = window.getSelection()
+    r.selectNodeContents(el); r.collapse(false); s.removeAllRanges(); s.addRange(r)
   } catch (_) { alert('Invalid JSON') }
 }
 
@@ -351,7 +403,10 @@ function removeBodyField(idx) {
 
 function syncBody() {
   const ta = $('body-ta')
-  if (ta) S.req.body.content = S.req.body.type === 'json' ? ta.value.trim() : ta.value
+  if (ta) {
+    const text = ta.tagName === 'TEXTAREA' ? ta.value : (ta.innerText || '')
+    S.req.body.content = S.req.body.type === 'json' ? text.trim() : text
+  }
   const rows = [...document.querySelectorAll('.kv-row[data-field="bodyfields"]')]
   if (rows.length) {
     S.req.body.fields = rows.map(row => ({
