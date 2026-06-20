@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build and release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: |
+          GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o wren-darwin-arm64  .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o wren-darwin-amd64  .
+          GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o wren-linux-amd64   .
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o wren-windows-amd64.exe .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            wren-darwin-arm64
+            wren-darwin-amd64
+            wren-linux-amd64
+            wren-windows-amd64.exe
