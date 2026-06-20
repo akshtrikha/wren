@@ -330,10 +330,17 @@ function setBodyType(type) {
 function getCaretOffset(el) {
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return 0
-  const r = sel.getRangeAt(0).cloneRange()
-  r.selectNodeContents(el)
-  r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset)
-  return r.toString().length
+  const range = sel.getRangeAt(0)
+  let count = 0
+  const walk = node => {
+    if (node === range.endContainer) { count += range.endOffset; return true }
+    if (node.nodeType === Node.TEXT_NODE) { count += node.length }
+    else if (node.nodeName === 'BR') { count += 1 }
+    else { for (const c of node.childNodes) { if (walk(c)) return true } }
+    return false
+  }
+  walk(el)
+  return count
 }
 
 function restoreCaretOffset(el, offset) {
@@ -374,7 +381,7 @@ function handleBodyPaste(e) {
 
 function handleBodyKeydown(e) {
   if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '  ') }
-  else if (e.key === 'Enter') { e.preventDefault(); document.execCommand('insertText', false, '\n') }
+  else if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); document.execCommand('insertText', false, '\n') }
 }
 
 function beautifyJSON() {
